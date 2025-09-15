@@ -3,16 +3,19 @@
 module Main where
 
 import Control.Concurrent
-import Control.Monad
+import Control.Monad hiding (when)
+import Data.List
 import Data.Time
-import Data.Time.LocalTime
 import Options.Applicative
+import System.Exit
+import System.Posix.Signals
 
 data App = BClock
   { vertical :: Bool
   , showSeconds :: Bool
   , zeroStr :: String
   , oneStr :: String
+  , newLines :: Bool
   }
 
 parser :: Parser App
@@ -33,7 +36,7 @@ parser =
           <> short '0'
           <> help "Zero string"
           <> showDefault
-          <> value "🭹"
+          <> value "·"
       )
     <*> strOption
       ( long "one"
@@ -42,9 +45,22 @@ parser =
           <> showDefault
           <> value "█"
       )
+    <*> switch
+      ( long "newlines"
+          <> short 'n'
+          <> help "Place additional newlines"
+      )
 
 main :: IO ()
-main = runApp =<< execParser opts
+main = do
+  tid <- myThreadId
+  !_ <-
+    installHandler
+      keyboardSignal
+      (Catch (putStrLn "\ESC[?25h" >> throwTo tid ExitSuccess))
+      Nothing
+
+  runApp =<< execParser opts
  where
   opts =
     info
@@ -59,8 +75,8 @@ toBinary n
   | n == 0 = []
   | otherwise = toBinary (n `div` 2) ++ show (n `mod` 2)
 
-setSize :: Int -> Int -> String -> String
-setSize sp z s = concat [replicate sp ' ', replicate (z - length s) '0', s, "\n"]
+setSize :: Int -> String -> String
+setSize z s = replicate (z - length s) '0' ++ s
 
 toStr :: String -> String -> Char -> String
 toStr zS oS = \case
@@ -68,16 +84,25 @@ toStr zS oS = \case
   '1' -> oS
   x -> [x]
 
+when :: Bool -> (a -> a) -> (a -> a)
+when c f = if c then f else id
+
 runApp :: App -> IO ()
-runApp BClock{zeroStr, oneStr, showSeconds} = do
+runApp BClock{vertical, zeroStr, oneStr, showSeconds, newLines} = do
   putStr "\ESC[?25l"
   forever $ do
     putStr "\ESC[2J"
     putStr "\ESC[H\n"
 
     now <- getZonedTime
-    let list' = words $ formatTime defaultTimeLocale "%H %M %S" now
-        list = if not showSeconds then drop 1 list' else list'
+    let list' = words $ formatTime defaultTimeLocale "%S %M %H" now
+        list = reverse $ if not showSeconds then drop 1 list' else list'
 
-    mapM_ (putStrLn . concatMap (toStr zeroStr oneStr) . setSize 2 6 . toBinary . read) list
+    let final =
+          when newLines (intersperse [])
+            . map (concatMap (toStr zeroStr oneStr) . ("  " ++))
+            $ when vertical (map (intersperse ' ') . transpose . map reverse)
+            $ map (setSize 6 . toBinary . read) list
+
+    mapM_ putStrLn final
     threadDelay 500000

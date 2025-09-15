@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               bclk
-version:            0.1.0.0
+version:            0.2.0
 synopsis:           Binary clock in your terminal
 homepage:           https://github.com/ProggerX/bclk
 license:            GPL-3.0-only
@@ -16,6 +16,6 @@ common warnings
 executable bclk
     import:           warnings
     main-is:          Main.hs
-    build-depends:    base >= 4.19.2.0, optparse-applicative, time
+    build-depends:    base >= 4.19.2.0, optparse-applicative, time, unix
     hs-source-dirs:   app
     default-language: GHC2021

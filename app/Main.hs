@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
@@ -12,10 +13,10 @@ import System.Posix.Signals
 
 data App = BClock
   { vertical :: Bool
-  , showSeconds :: Bool
   , zeroStr :: String
   , oneStr :: String
   , newLines :: Bool
+  , format :: String
   }
 
 parser :: Parser App
@@ -25,11 +26,6 @@ parser =
       ( long "vertical"
           <> short 'v'
           <> help "Use vertical layout"
-      )
-    <*> switch
-      ( long "seconds"
-          <> short 's'
-          <> help "Show seconds"
       )
     <*> strOption
       ( long "zero"
@@ -49,6 +45,13 @@ parser =
       ( long "newlines"
           <> short 'n'
           <> help "Place additional newlines"
+      )
+    <*> strOption
+      ( long "format"
+          <> short 'f'
+          <> help "Format"
+          <> showDefault
+          <> value "%H %M %S"
       )
 
 main :: IO ()
@@ -88,15 +91,14 @@ when :: Bool -> (a -> a) -> (a -> a)
 when c f = if c then f else id
 
 runApp :: App -> IO ()
-runApp BClock{vertical, zeroStr, oneStr, showSeconds, newLines} = do
+runApp BClock{..} = do
   putStr "\ESC[?25l"
   forever $ do
     putStr "\ESC[2J"
     putStr "\ESC[H\n"
 
     now <- getZonedTime
-    let list' = words $ formatTime defaultTimeLocale "%S %M %H" now
-        list = reverse $ if not showSeconds then drop 1 list' else list'
+    let list = words $ formatTime defaultTimeLocale format now
 
     let final =
           when newLines (intersperse [])
